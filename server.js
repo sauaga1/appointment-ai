@@ -1,53 +1,76 @@
-/*
-Single File: server.js
-Fully Fixed Hindi + Hinglish Clinic Voice Agent
-- Works with Twilio IVR
-- Handles Intent properly (no call cut)
-- Uses full PUBLIC_URL in all actions
-- Saves appointment to database API
-- Includes fallback redirects
-- Node 18 compatible (no node-fetch required)
-
-ENV VARIABLES (Railway):
-TWILIO_ACCOUNT_SID=ACxxxxxxxx
-TWILIO_AUTH_TOKEN=xxxxxxxx
-TWILIO_PHONE_NUMBER=+1xxxxxxxx
-PUBLIC_URL=https://your-app.up.railway.app
-APPOINTMENT_API_URL=https://yourdomain.com/save_appointment.php
-PORT=8080
-*/
-
 import express from "express";
 import dotenv from "dotenv";
 import twilio from "twilio";
 
-// Load env
 dotenv.config();
 
 const app = express();
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Twilio client
+const VoiceResponse = twilio.twiml.VoiceResponse;
+
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 );
 
-// Health check
+/* =============================
+   FAST NON-BLOCKING SAVE
+============================= */
+
+function saveAppointmentAsync(time) {
+  setImmediate(async () => {
+    try {
+      const controller = new AbortController();
+
+      const timeout = setTimeout(() => {
+        controller.abort();
+      }, 2000);
+
+      await fetch(process.env.APPOINTMENT_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          name: "Voice Caller",
+          age: "Unknown",
+          problem: "Voice Booking",
+          date: "User Selected",
+          time: time
+        })
+      });
+
+      clearTimeout(timeout);
+
+      console.log("Appointment saved");
+    } catch (err) {
+      console.log("Save failed (non-blocking):", err.message);
+    }
+  });
+}
+
+/* =============================
+   HEALTH
+============================= */
+
 app.get("/", (req, res) => {
   res.send("Clinic Voice Agent Running");
 });
 
-// =============================
-// Trigger Call API
-// =============================
+/* =============================
+   CALL TRIGGER
+============================= */
+
 app.post("/call", async (req, res) => {
   try {
     const { to } = req.body;
 
     const call = await client.calls.create({
-      to: to,
+      to,
       from: process.env.TWILIO_PHONE_NUMBER,
       url: `${process.env.PUBLIC_URL}/twiml`,
       method: "POST"
@@ -57,8 +80,10 @@ app.post("/call", async (req, res) => {
       success: true,
       callSid: call.sid
     });
+
   } catch (error) {
     console.error("Call Error:", error);
+
     res.status(500).json({
       success: false,
       error: error.message
@@ -66,20 +91,26 @@ app.post("/call", async (req, res) => {
   }
 });
 
-// =============================
-// Step 1: Greeting
-// =============================
+/* =============================
+   STEP 1 — GREETING
+============================= */
+
 app.post("/twiml", (req, res) => {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
+
   const twiml = new VoiceResponse();
 
   const gather = twiml.gather({
     input: "speech",
     language: "hi-IN",
+
     action: `${process.env.PUBLIC_URL}/intent`,
+
     method: "POST",
-    speechTimeout: 5,
-    timeout: 10
+
+    timeout: 3,
+    speechTimeout: "auto",
+
+    actionOnEmptyResult: true
   });
 
   gather.say(
@@ -90,249 +121,243 @@ app.post("/twiml", (req, res) => {
     "Namaste ji, main Riya bol rahi hoon. Kya aap appointment book karna chahte hain?"
   );
 
-  // fallback repeat
-  twiml.redirect(`${process.env.PUBLIC_URL}/twiml`);
-
   res.type("text/xml");
   res.send(twiml.toString());
 });
 
-// =============================
-// Step 2: Intent Detection
-// =============================
+/* =============================
+   STEP 2 — INTENT
+============================= */
+
 app.post("/intent", (req, res) => {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
+
+  console.time("INTENT_FLOW");
+
   const twiml = new VoiceResponse();
 
-  // Normalize speech
-  const rawSpeech = req.body.SpeechResult || "";
-  const speech = rawSpeech
+  const speech = (
+    req.body.SpeechResult || ""
+  )
     .toLowerCase()
     .replace(/[!?.]/g, "")
     .trim();
 
-  console.log("Intent speech:", speech);
+  console.log("Intent:", speech);
 
-  // Define intents ONLY ONCE
   const yesIntents = [
     "haan",
-    "haan ji",
     "yes",
-    "yeah",
-    "book",
-    "booking",
     "appointment",
-    "karna",
-    "karni",
-    "schedule",
+    "book",
     "doctor",
     "milna",
     "checkup",
     "consultation",
     "हां",
-    "हाँ",
-    "हां जी",
-    "अपॉइंटमेंट",
-    "डॉक्टर",
-    "मिलना"
+    "अपॉइंटमेंट"
   ];
 
   const noIntents = [
     "nahi",
-    "nahin",
     "no",
     "cancel",
     "later",
-    "baad me",
-    "नहीं",
-    "नही"
+    "नहीं"
   ];
 
-  const isYes = yesIntents.some(word =>
-    speech.includes(word)
-  );
+  const isYes =
+    yesIntents.some(w =>
+      speech.includes(w)
+    );
 
-  const isNo = noIntents.some(word =>
-    speech.includes(word)
-  );
+  const isNo =
+    noIntents.some(w =>
+      speech.includes(w)
+    );
 
   if (isYes) {
+
     const gather = twiml.gather({
       input: "speech",
+
       language: "hi-IN",
+
       action: `${process.env.PUBLIC_URL}/get-name`,
+
       method: "POST",
-      speechTimeout: 5,
-      timeout: 10
+
+      timeout: 3,
+      speechTimeout: "auto",
+
+      actionOnEmptyResult: true
     });
 
     gather.say(
       {
-        voice: "Polly.Aditi",
-        language: "hi-IN"
+        voice: "Polly.Aditi"
       },
       "Theek hai. Kripya apna naam batayein."
     );
 
-    twiml.redirect(
-      `${process.env.PUBLIC_URL}/intent`
-    );
   }
 
   else if (isNo) {
+
     twiml.say(
       {
-        voice: "Polly.Aditi",
-        language: "hi-IN"
+        voice: "Polly.Aditi"
       },
       "Theek hai. Dhanyavaad."
     );
 
     twiml.hangup();
+
   }
 
   else {
+
     twiml.say(
       {
-        voice: "Polly.Aditi",
-        language: "hi-IN"
+        voice: "Polly.Aditi"
       },
-      "Main samajh nahi payi. Kripya haan ya na bolein."
+      "Kripya haan ya na bolein."
     );
 
     twiml.redirect(
-      `${process.env.PUBLIC_URL}/intent`
+      `${process.env.PUBLIC_URL}/twiml`
     );
+
   }
+
+  console.timeEnd("INTENT_FLOW");
 
   res.type("text/xml");
   res.send(twiml.toString());
 });
 
-// =============================
-// Step 3: Get Name
-// =============================
+/* =============================
+   STEP 3 — NAME
+============================= */
+
 app.post("/get-name", (req, res) => {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
+
   const twiml = new VoiceResponse();
 
-  const name = req.body.SpeechResult || "Guest";
+  const name =
+    req.body.SpeechResult || "Guest";
 
   console.log("Name:", name);
 
   const gather = twiml.gather({
     input: "speech",
+
     language: "hi-IN",
+
     action: `${process.env.PUBLIC_URL}/get-date`,
+
     method: "POST",
-    speechTimeout: 5,
-    timeout: 10
+
+    timeout: 3,
+    speechTimeout: "auto",
+
+    actionOnEmptyResult: true
   });
 
   gather.say(
     {
-      voice: "Polly.Aditi",
-      language: "hi-IN"
+      voice: "Polly.Aditi"
     },
     `Dhanyavaad ${name} ji. Aap kis din appointment lena chahte hain?`
   );
-
-  twiml.redirect(`${process.env.PUBLIC_URL}/get-name`);
 
   res.type("text/xml");
   res.send(twiml.toString());
 });
 
-// =============================
-// Step 4: Get Date
-// =============================
+/* =============================
+   STEP 4 — DATE
+============================= */
+
 app.post("/get-date", (req, res) => {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
+
   const twiml = new VoiceResponse();
 
-  const date = req.body.SpeechResult || "Kal";
+  const date =
+    req.body.SpeechResult || "Kal";
 
   console.log("Date:", date);
 
   const gather = twiml.gather({
     input: "speech",
+
     language: "hi-IN",
+
     action: `${process.env.PUBLIC_URL}/get-time`,
+
     method: "POST",
-    speechTimeout: 5,
-    timeout: 10
+
+    timeout: 3,
+    speechTimeout: "auto",
+
+    actionOnEmptyResult: true
   });
 
   gather.say(
     {
-      voice: "Polly.Aditi",
-      language: "hi-IN"
+      voice: "Polly.Aditi"
     },
     `Theek hai. ${date} ke liye appointment set kar rahe hain. Aap subah aana chahenge ya shaam?`
   );
 
-  twiml.redirect(`${process.env.PUBLIC_URL}/get-date`);
-
   res.type("text/xml");
   res.send(twiml.toString());
 });
 
-// =============================
-// Step 5: Save Appointment
-// =============================
-app.post("/get-time", async (req, res) => {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
+/* =============================
+   STEP 5 — TIME + SAVE
+============================= */
+
+app.post("/get-time", (req, res) => {
+
+  console.time("FINAL_FLOW");
+
   const twiml = new VoiceResponse();
 
-  const time = req.body.SpeechResult || "Subah";
+  const time =
+    req.body.SpeechResult || "Subah";
 
   console.log("Time:", time);
 
-  try {
-    await fetch(process.env.APPOINTMENT_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        name: "Voice Caller",
-        age: "Unknown",
-        problem: "Voice Booking",
-        date: "User Selected",
-        time: time
-      })
-    });
+  // FAST — do not block voice response
+  saveAppointmentAsync(time);
 
-    twiml.say(
-      {
-        voice: "Polly.Aditi",
-        language: "hi-IN"
-      },
-      "Aapka appointment safalta se book ho gaya hai. Dhanyavaad."
-    );
-  } catch (error) {
-    console.error("Database Error:", error);
-
-    twiml.say(
-      {
-        voice: "Polly.Aditi",
-        language: "hi-IN"
-      },
-      "Kshama kijiye. Appointment save nahi ho paya."
-    );
-  }
+  twiml.say(
+    {
+      voice: "Polly.Aditi"
+    },
+    "Aapka appointment safalta se book ho gaya hai. Dhanyavaad."
+  );
 
   twiml.hangup();
+
+  console.timeEnd("FINAL_FLOW");
 
   res.type("text/xml");
   res.send(twiml.toString());
 });
 
-// =============================
-// Start Server
-// =============================
-const PORT = process.env.PORT || 8080;
+/* =============================
+   START SERVER
+============================= */
+
+const PORT =
+  process.env.PORT || 8080;
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+
+  console.log(
+    "Server running on port",
+    PORT
+  );
+
 });
