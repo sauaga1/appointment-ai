@@ -264,8 +264,10 @@ app.post("/twiml", (req, res) => {
 
 app.post("/intent", (req, res) => {
 
-  const twiml =
-    new VoiceResponse();
+  const twiml = new VoiceResponse();
+
+  const session =
+    getSession(req.body.CallSid);
 
   const speech =
     (req.body.SpeechResult || "")
@@ -298,6 +300,8 @@ app.post("/intent", (req, res) => {
 
   if (isYes) {
 
+    session.retries = 0;
+
     const gather =
       fastGather(
         twiml,
@@ -306,8 +310,7 @@ app.post("/intent", (req, res) => {
 
     gather.say(
       {
-        voice:
-          "Polly.Joanna"
+        voice: "Polly.Joanna"
       },
       "Please tell me your name."
     );
@@ -318,8 +321,7 @@ app.post("/intent", (req, res) => {
 
     twiml.say(
       {
-        voice:
-          "Polly.Joanna"
+        voice: "Polly.Joanna"
       },
       "Okay. Thank you."
     );
@@ -334,26 +336,63 @@ app.post("/intent", (req, res) => {
 
   else {
 
-    twiml.say(
-      {
-        voice:
-          "Polly.Joanna"
-      },
-      "Sorry, I did not understand."
-    );
+    session.retries++;
 
-    twiml.hangup();
+    if (session.retries === 1) {
 
-    sessions.delete(
-      req.body.CallSid
-    );
+      const gather =
+        fastGather(
+          twiml,
+          "/intent"
+        );
+
+      gather.say(
+        {
+          voice: "Polly.Joanna"
+        },
+        "Sorry, I did not understand. Please say yes or no."
+      );
+
+    }
+
+    else if (session.retries === 2) {
+
+      const gather =
+        fastGather(
+          twiml,
+          "/intent"
+        );
+
+      gather.say(
+        {
+          voice: "Polly.Joanna"
+        },
+        "I still did not get that. Please say yes or no."
+      );
+
+    }
+
+    else {
+
+      twiml.say(
+        {
+          voice: "Polly.Joanna"
+        },
+        "No response received. Ending the call."
+      );
+
+      twiml.hangup();
+
+      sessions.delete(
+        req.body.CallSid
+      );
+
+    }
 
   }
 
   res.type("text/xml");
-  res.send(
-    twiml.toString()
-  );
+  res.send(twiml.toString());
 
 });
 
