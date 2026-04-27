@@ -1,12 +1,14 @@
 <?php
 header("Content-Type: application/json");
-$conn = new mysqli("saimedical.arpanasoftware.com","u644637155_medico_db","u644637155_medico_db","e^NUf?&9&wK5");
+$conn = new mysqli("localhost","u644637155_appointments","u644637155_appointments","e^NUf?&9&wK5");
 if ($conn->connect_error) { die(json_encode(["error"=>"DB failed"])); }
 
 $name = $_POST["name"] ?? "";
-$phone = $_POST["phone"] ?? "";
-$slot = $_POST["slot"] ?? "";
+$age = $_POST["age"] ?? "";
+$problem = $_POST["problem"] ?? "";
+$date = $_POST["date"] ?? "";
+$time = $_POST["time"] ?? "";
 
-$conn->query("INSERT INTO bookings (name, phone, slot) VALUES ('$name','$phone','$slot')");
+$conn->query("INSERT INTO bookings (name, age, problem, date, time) VALUES ('$name','$age','$problem', '$date', '$time')");
 echo json_encode(["status"=>"booked"]);
 ?>
