@@ -1,6 +1,6 @@
 <?php
 header("Content-Type: application/json");
-$conn = new mysqli("localhost","root","","appointments");
+$conn = new mysqli("saimedical.arpanasoftware.com","u644637155_medico_db","u644637155_medico_db","e^NUf?&9&wK5");
 if ($conn->connect_error) { die(json_encode(["error"=>"DB failed"])); }
 
 $name = $_POST["name"] ?? "";
