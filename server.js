@@ -56,6 +56,9 @@ app.post("/call", async (req, res) => {
 
   try {
 
+    console.log("TWILIO_ACCOUNT_SID:", process.env.TWILIO_ACCOUNT_SID);
+console.log("TWILIO_AUTH_TOKEN length:", process.env.TWILIO_AUTH_TOKEN?.length);
+    
     const call = await client.calls.create({
       to,
       from: process.env.TWILIO_PHONE_NUMBER,
