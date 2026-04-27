@@ -393,3 +393,50 @@ app.listen(PORT, () => {
   );
 
 });
+
+app.post("/call", async (req, res) => {
+
+  try {
+
+    console.log("Call request body:", req.body);
+
+    const { to } = req.body;
+
+    const call = await client.calls.create({
+
+      to: to,
+
+      from:
+        process.env.TWILIO_PHONE_NUMBER,
+
+      url:
+        `${process.env.PUBLIC_URL}/twiml`,
+
+      method: "POST"
+
+    });
+
+    console.log("Call SID:", call.sid);
+
+    res.json({
+      success: true,
+      callSid: call.sid
+    });
+
+  }
+
+  catch (error) {
+
+    console.error(
+      "CALL ERROR:",
+      error.message
+    );
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+
+  }
+
+});
