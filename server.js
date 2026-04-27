@@ -67,9 +67,7 @@ function saveAppointmentAsync(data) {
 
       const timeout =
         setTimeout(() => {
-
           controller.abort();
-
         }, 5000);
 
       await fetch(
@@ -97,15 +95,10 @@ function saveAppointmentAsync(data) {
 
     } catch (err) {
 
-      if (
-        process.env.DEBUG ===
-        "true"
-      ) {
-        console.log(
-          "Save failed:",
-          err.message
-        );
-      }
+      console.log(
+        "Save failed:",
+        err.message
+      );
 
     }
 
@@ -114,7 +107,7 @@ function saveAppointmentAsync(data) {
 }
 
 /* =============================
-   FAST GATHER TEMPLATE
+   FAST GATHER
 ============================= */
 
 function fastGather(twiml, url) {
@@ -123,7 +116,7 @@ function fastGather(twiml, url) {
 
     input: "speech",
 
-    language: "en-US",
+    language: "en-IN",
 
     bargeIn: true,
 
@@ -143,18 +136,6 @@ function fastGather(twiml, url) {
 }
 
 /* =============================
-   HEALTH
-============================= */
-
-app.get("/", (req, res) => {
-
-  res.send(
-    "Voice Agent Running"
-  );
-
-});
-
-/* =============================
    CALL TRIGGER
 ============================= */
 
@@ -162,8 +143,7 @@ app.post("/call", async (req, res) => {
 
   try {
 
-    const { to } =
-      req.body;
+    const { to } = req.body;
 
     const call =
       await client.calls.create({
@@ -183,16 +163,16 @@ app.post("/call", async (req, res) => {
 
     res.json({
       success: true,
-      callSid:
-        call.sid
+      callSid: call.sid
     });
 
-  } catch (error) {
+  }
+
+  catch (error) {
 
     res.status(500).json({
       success: false,
-      error:
-        error.message
+      error: error.message
     });
 
   }
@@ -218,11 +198,7 @@ app.post("/twiml", (req, res) => {
   if (session.retries > 2) {
 
     twiml.say(
-      {
-        voice:
-          "Polly.Joanna"
-      },
-      "No response received. Please call again later."
+      "No response received. Kripya dobara call karein."
     );
 
     twiml.hangup();
@@ -242,11 +218,7 @@ app.post("/twiml", (req, res) => {
       );
 
     gather.say(
-      {
-        voice:
-          "Polly.Joanna"
-      },
-      "Hello. Would you like to book an appointment?"
+      "Namaste. Hello. Kya aap appointment book karna chahte hain?"
     );
 
   }
@@ -264,28 +236,50 @@ app.post("/twiml", (req, res) => {
 
 app.post("/intent", (req, res) => {
 
-  const twiml = new VoiceResponse();
+  const twiml =
+    new VoiceResponse();
 
   const session =
-    getSession(req.body.CallSid);
+    getSession(
+      req.body.CallSid
+    );
 
   const speech =
     (req.body.SpeechResult || "")
       .toLowerCase()
       .trim();
 
+  console.log(
+    "Intent:",
+    speech
+  );
+
   const yesWords = [
+
     "yes",
     "yeah",
     "book",
     "appointment",
-    "schedule"
+    "schedule",
+
+    "haan",
+    "ha",
+    "han",
+    "karna",
+    "book karo",
+    "doctor"
   ];
 
   const noWords = [
+
     "no",
     "cancel",
-    "later"
+    "later",
+
+    "nahi",
+    "nahin",
+    "baad me",
+    "cancel karo"
   ];
 
   const isYes =
@@ -309,10 +303,7 @@ app.post("/intent", (req, res) => {
       );
 
     gather.say(
-      {
-        voice: "Polly.Joanna"
-      },
-      "Please tell me your name."
+      "Kripya apna naam batayein."
     );
 
   }
@@ -320,10 +311,7 @@ app.post("/intent", (req, res) => {
   else if (isNo) {
 
     twiml.say(
-      {
-        voice: "Polly.Joanna"
-      },
-      "Okay. Thank you."
+      "Theek hai. Dhanyavaad."
     );
 
     twiml.hangup();
@@ -338,7 +326,7 @@ app.post("/intent", (req, res) => {
 
     session.retries++;
 
-    if (session.retries === 1) {
+    if (session.retries < 3) {
 
       const gather =
         fastGather(
@@ -347,27 +335,7 @@ app.post("/intent", (req, res) => {
         );
 
       gather.say(
-        {
-          voice: "Polly.Joanna"
-        },
-        "Sorry, I did not understand. Please say yes or no."
-      );
-
-    }
-
-    else if (session.retries === 2) {
-
-      const gather =
-        fastGather(
-          twiml,
-          "/intent"
-        );
-
-      gather.say(
-        {
-          voice: "Polly.Joanna"
-        },
-        "I still did not get that. Please say yes or no."
+        "Samajh nahi aaya. Kripya haan ya nahi bolein."
       );
 
     }
@@ -375,10 +343,7 @@ app.post("/intent", (req, res) => {
     else {
 
       twiml.say(
-        {
-          voice: "Polly.Joanna"
-        },
-        "No response received. Ending the call."
+        "No response received. Call ending."
       );
 
       twiml.hangup();
@@ -392,12 +357,14 @@ app.post("/intent", (req, res) => {
   }
 
   res.type("text/xml");
-  res.send(twiml.toString());
+  res.send(
+    twiml.toString()
+  );
 
 });
 
 /* =============================
-   STEP 3 — NAME
+   NAME
 ============================= */
 
 app.post("/get-name", (req, res) => {
@@ -421,11 +388,7 @@ app.post("/get-name", (req, res) => {
     );
 
   gather.say(
-    {
-      voice:
-        "Polly.Joanna"
-    },
-    "Which date would you like?"
+    "Kaunsi date par appointment chahte hain?"
   );
 
   res.type("text/xml");
@@ -436,7 +399,7 @@ app.post("/get-name", (req, res) => {
 });
 
 /* =============================
-   STEP 4 — DATE
+   DATE
 ============================= */
 
 app.post("/get-date", (req, res) => {
@@ -460,11 +423,7 @@ app.post("/get-date", (req, res) => {
     );
 
   gather.say(
-    {
-      voice:
-        "Polly.Joanna"
-    },
-    "Choose time. Ten AM, eleven thirty AM, two PM, or four thirty PM."
+    "Samay chuniyega. Das baje, gyarah baje, do baje, ya chaar baje."
   );
 
   res.type("text/xml");
@@ -475,72 +434,78 @@ app.post("/get-date", (req, res) => {
 });
 
 /* =============================
-   STEP 5 — TIME + SAVE
+   TIME
 ============================= */
 
 app.post("/get-time", (req, res) => {
 
-  const twiml = new VoiceResponse();
+  const twiml =
+    new VoiceResponse();
 
   const session =
-    getSession(req.body.CallSid);
+    getSession(
+      req.body.CallSid
+    );
 
   const speech =
     (req.body.SpeechResult || "")
       .toLowerCase()
       .trim();
 
-  console.log("User said:", speech);
+  console.log(
+    "Time speech:",
+    speech
+  );
 
   let selected = null;
 
-  /* SMART SLOT MATCHING */
-
   if (
     speech.includes("10") ||
-    speech.includes("ten")
+    speech.includes("ten") ||
+    speech.includes("das")
   ) {
-    selected = "10:00 AM";
+    selected =
+      "10:00 AM";
   }
 
   else if (
     speech.includes("11") ||
-    speech.includes("eleven")
+    speech.includes("eleven") ||
+    speech.includes("gyarah")
   ) {
-    selected = "11:30 AM";
+    selected =
+      "11:30 AM";
   }
 
   else if (
     speech.includes("2") ||
-    speech.includes("two")
+    speech.includes("two") ||
+    speech.includes("do")
   ) {
-    selected = "2:00 PM";
+    selected =
+      "2:00 PM";
   }
 
   else if (
     speech.includes("4") ||
-    speech.includes("four")
+    speech.includes("four") ||
+    speech.includes("chaar")
   ) {
-    selected = "4:30 PM";
+    selected =
+      "4:30 PM";
   }
-
-  /* SUCCESS */
 
   if (selected) {
 
-    session.time = selected;
-
-    session.retries = 0;
+    session.time =
+      selected;
 
     saveAppointmentAsync(
       session
     );
 
     twiml.say(
-      {
-        voice: "Polly.Joanna"
-      },
-      `Appointment booked for ${selected}. Thank you.`
+      `Appointment ${selected} par book ho gaya hai. Dhanyavaad.`
     );
 
     twiml.hangup();
@@ -550,8 +515,6 @@ app.post("/get-time", (req, res) => {
     );
 
   }
-
-  /* RETRY LOGIC */
 
   else {
 
@@ -566,10 +529,7 @@ app.post("/get-time", (req, res) => {
         );
 
       gather.say(
-        {
-          voice: "Polly.Joanna"
-        },
-        "Please say a time. For example, ten AM, eleven thirty AM, two PM, or four thirty PM."
+        "Kripya valid time bolein. Jaise das baje, gyarah baje, do baje."
       );
 
     }
@@ -577,10 +537,7 @@ app.post("/get-time", (req, res) => {
     else {
 
       twiml.say(
-        {
-          voice: "Polly.Joanna"
-        },
-        "No valid time received. Ending the call."
+        "Time samajh nahi aaya. Call ending."
       );
 
       twiml.hangup();
