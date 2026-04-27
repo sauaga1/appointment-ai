@@ -104,7 +104,7 @@ app.post("/intent", (req, res) => {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  // Normalize speech (handle Hindi + Hinglish + punctuation)
+  // Normalize speech
   const rawSpeech = req.body.SpeechResult || "";
   const speech = rawSpeech
     .toLowerCase()
@@ -113,23 +113,20 @@ app.post("/intent", (req, res) => {
 
   console.log("Intent speech:", speech);
 
-  // Smart Hinglish + Hindi Intent Detection
+  // Define intents ONLY ONCE
   const yesIntents = [
     "haan",
     "haan ji",
     "yes",
     "yeah",
-    "yep",
     "book",
     "booking",
     "appointment",
     "karna",
     "karni",
-    "kar do",
     "schedule",
     "doctor",
     "milna",
-    "dikhana",
     "checkup",
     "consultation",
     "हां",
@@ -141,58 +138,23 @@ app.post("/intent", (req, res) => {
   ];
 
   const noIntents = [
-    "nahin",
     "nahi",
+    "nahin",
     "no",
     "cancel",
-    "baad me",
     "later",
-    "zarurat nahi",
+    "baad me",
     "नहीं",
-    "नही",
-    "मत"
+    "नही"
   ];
 
-  const isYes = yesIntents.some(word => speech.includes(word));
-  const isNo = noIntents.some(word => speech.includes(word));
+  const isYes = yesIntents.some(word =>
+    speech.includes(word)
+  );
 
-  if (isYes)
-
-  console.log("Intent speech:", speech);
-
-  // Smart Hinglish Intent Detection
-  const yesIntents = [
-    "haan",
-    "haan ji",
-    "yes",
-    "yeah",
-    "yep",
-    "book",
-    "booking",
-    "appointment",
-    "karna",
-    "karni",
-    "kar do",
-    "schedule",
-    "doctor",
-    "milna",
-    "dikhana",
-    "checkup",
-    "consultation"
-  ];
-
-  const noIntents = [
-    "nahin",
-    "nahi",
-    "no",
-    "cancel",
-    "baad me",
-    "later",
-    "zarurat nahi"
-  ];
-
-  const isYes = yesIntents.some(word => speech.includes(word));
-  const isNo = noIntents.some(word => speech.includes(word));
+  const isNo = noIntents.some(word =>
+    speech.includes(word)
+  );
 
   if (isYes) {
     const gather = twiml.gather({
@@ -212,18 +174,25 @@ app.post("/intent", (req, res) => {
       "Theek hai. Kripya apna naam batayein."
     );
 
-    twiml.redirect(`${process.env.PUBLIC_URL}/intent`);
-  } else {
-    const retry = twiml.gather({
-      input: "speech",
-      language: "hi-IN",
-      action: `${process.env.PUBLIC_URL}/intent`,
-      method: "POST",
-      speechTimeout: 5,
-      timeout: 10
-    });
+    twiml.redirect(
+      `${process.env.PUBLIC_URL}/intent`
+    );
+  }
 
-    retry.say(
+  else if (isNo) {
+    twiml.say(
+      {
+        voice: "Polly.Aditi",
+        language: "hi-IN"
+      },
+      "Theek hai. Dhanyavaad."
+    );
+
+    twiml.hangup();
+  }
+
+  else {
+    twiml.say(
       {
         voice: "Polly.Aditi",
         language: "hi-IN"
@@ -231,7 +200,9 @@ app.post("/intent", (req, res) => {
       "Main samajh nahi payi. Kripya haan ya na bolein."
     );
 
-    twiml.redirect(`${process.env.PUBLIC_URL}/intent`);
+    twiml.redirect(
+      `${process.env.PUBLIC_URL}/intent`
+    );
   }
 
   res.type("text/xml");
