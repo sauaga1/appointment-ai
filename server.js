@@ -250,36 +250,75 @@ app.post("/intent", (req, res) => {
       .trim();
 
   console.log(
-    "Intent:",
+    "Intent speech:",
     speech
   );
+
+  /* EMPTY SPEECH HANDLING */
+
+  if (!speech) {
+
+    session.retries++;
+
+    const gather =
+      fastGather(
+        twiml,
+        "/intent"
+      );
+
+    gather.say(
+      "Mujhe awaaz nahi mili. Kripya haan ya nahi bolein."
+    );
+
+    res.type("text/xml");
+    return res.send(
+      twiml.toString()
+    );
+
+  }
+
+  /* SMART YES WORDS */
 
   const yesWords = [
 
     "yes",
     "yeah",
+    "yep",
+    "sure",
+    "ok",
+    "okay",
     "book",
     "appointment",
     "schedule",
+    "doctor",
 
     "haan",
     "ha",
     "han",
-    "karna",
+    "haan ji",
+    "kar do",
     "book karo",
-    "doctor"
+    "chahiye",
+    "karna hai",
+    "appointment chahiye"
   ];
+
+  /* SMART NO WORDS */
 
   const noWords = [
 
     "no",
+    "nope",
     "cancel",
     "later",
+    "not now",
 
     "nahi",
     "nahin",
+    "mat",
     "baad me",
-    "cancel karo"
+    "cancel karo",
+    "abhi nahi"
   ];
 
   const isYes =
@@ -292,6 +331,8 @@ app.post("/intent", (req, res) => {
       speech.includes(word)
     );
 
+  /* YES FLOW */
+
   if (isYes) {
 
     session.retries = 0;
@@ -303,10 +344,12 @@ app.post("/intent", (req, res) => {
       );
 
     gather.say(
-      "Kripya apna naam batayein."
+      "Theek hai. Kripya apna naam batayein."
     );
 
   }
+
+  /* NO FLOW */
 
   else if (isNo) {
 
@@ -321,6 +364,8 @@ app.post("/intent", (req, res) => {
     );
 
   }
+
+  /* UNKNOWN */
 
   else {
 
@@ -343,7 +388,7 @@ app.post("/intent", (req, res) => {
     else {
 
       twiml.say(
-        "No response received. Call ending."
+        "Response nahi mila. Call band ki ja rahi hai."
       );
 
       twiml.hangup();
