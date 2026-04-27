@@ -1,7 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
 import twilio from "twilio";
-import http from "http";
 
 dotenv.config();
 
@@ -13,85 +12,55 @@ app.use(express.urlencoded({ extended: true }));
 const VoiceResponse = twilio.twiml.VoiceResponse;
 
 /* =============================
-   HTTP KEEP ALIVE
+   TEMP BOOKING STORAGE
 ============================= */
 
-const agent = new http.Agent({
-  keepAlive: true
-});
+let bookingData = {
+  name: "",
+  date: "",
+  time: ""
+};
 
 /* =============================
-   TWILIO CLIENT
-============================= */
-
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
-
-/* =============================
-   SESSION STORAGE
-============================= */
-
-const sessions = new Map();
-
-function getSession(callSid) {
-
-  if (!sessions.has(callSid)) {
-
-    sessions.set(callSid, {
-      name: "",
-      date: "",
-      time: "",
-      retries: 0
-    });
-
-  }
-
-  return sessions.get(callSid);
-
-}
-
-/* =============================
-   FAST DATABASE SAVE
+   FAST NON-BLOCKING SAVE
 ============================= */
 
 function saveAppointmentAsync(data) {
-
-  process.nextTick(async () => {
-
+  setImmediate(async () => {
     try {
 
-      const controller =
-        new AbortController();
+      console.log("Saving appointment:", data);
 
-      const timeout =
-        setTimeout(() => {
-          controller.abort();
-        }, 5000);
+      const controller = new AbortController();
 
-      await fetch(
+      const timeout = setTimeout(() => {
+        controller.abort();
+      }, 5000);
+
+      const response = await fetch(
         process.env.APPOINTMENT_API_URL,
         {
           method: "POST",
 
           headers: {
-            "Content-Type":
-              "application/json"
+            "Content-Type": "application/json"
           },
 
-          agent,
-          keepalive: true,
+          signal: controller.signal,
 
-          signal:
-            controller.signal,
-
-          body:
-            JSON.stringify(data)
+          body: JSON.stringify({
+            name: data.name,
+            date: data.date,
+            time: data.time
+          })
         }
       );
 
       clearTimeout(timeout);
+
+      const result = await response.text();
+
+      console.log("Database response:", result);
 
     } catch (err) {
 
@@ -101,82 +70,15 @@ function saveAppointmentAsync(data) {
       );
 
     }
-
   });
-
 }
 
 /* =============================
-   FAST GATHER
+   HEALTH CHECK
 ============================= */
 
-function fastGather(twiml, url) {
-
-  return twiml.gather({
-
-    input: "speech",
-
-    language: "en-IN",
-
-    bargeIn: true,
-
-    timeout: 1,
-
-    speechTimeout: 1,
-
-    actionOnEmptyResult: true,
-
-    method: "POST",
-
-    action:
-      `${process.env.PUBLIC_URL}${url}`
-
-  });
-
-}
-
-/* =============================
-   CALL TRIGGER
-============================= */
-
-app.post("/call", async (req, res) => {
-
-  try {
-
-    const { to } = req.body;
-
-    const call =
-      await client.calls.create({
-
-        to,
-
-        from:
-          process.env
-            .TWILIO_PHONE_NUMBER,
-
-        url:
-          `${process.env.PUBLIC_URL}/twiml`,
-
-        method: "POST"
-
-      });
-
-    res.json({
-      success: true,
-      callSid: call.sid
-    });
-
-  }
-
-  catch (error) {
-
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-
-  }
-
+app.get("/", (req, res) => {
+  res.send("Clinic Voice Agent Running");
 });
 
 /* =============================
@@ -185,48 +87,27 @@ app.post("/call", async (req, res) => {
 
 app.post("/twiml", (req, res) => {
 
-  const twiml =
-    new VoiceResponse();
+  const twiml = new VoiceResponse();
 
-  const session =
-    getSession(
-      req.body.CallSid
-    );
+  const gather = twiml.gather({
+    input: "speech",
+    language: "en-US",
+    action: `${process.env.PUBLIC_URL}/intent`,
+    method: "POST",
+    timeout: 3,
+    speechTimeout: "auto",
+    actionOnEmptyResult: true
+  });
 
-  session.retries++;
-
-  if (session.retries > 2) {
-
-    twiml.say(
-      "No response received. Kripya dobara call karein."
-    );
-
-    twiml.hangup();
-
-    sessions.delete(
-      req.body.CallSid
-    );
-
-  }
-
-  else {
-
-    const gather =
-      fastGather(
-        twiml,
-        "/intent"
-      );
-
-    gather.say(
-      "Namaste. Hello. Kya aap appointment book karna chahte hain?"
-    );
-
-  }
+  gather.say(
+    {
+      voice: "Polly.Joanna"
+    },
+    "Hello, this is Riya from the clinic. Would you like to book an appointment?"
+  );
 
   res.type("text/xml");
-  res.send(
-    twiml.toString()
-  );
+  res.send(twiml.toString());
 
 });
 
@@ -236,89 +117,27 @@ app.post("/twiml", (req, res) => {
 
 app.post("/intent", (req, res) => {
 
-  const twiml =
-    new VoiceResponse();
-
-  const session =
-    getSession(
-      req.body.CallSid
-    );
+  const twiml = new VoiceResponse();
 
   const speech =
     (req.body.SpeechResult || "")
       .toLowerCase()
       .trim();
 
-  console.log(
-    "Intent speech:",
-    speech
-  );
-
-  /* EMPTY SPEECH HANDLING */
-
-  if (!speech) {
-
-    session.retries++;
-
-    const gather =
-      fastGather(
-        twiml,
-        "/intent"
-      );
-
-    gather.say(
-      "Mujhe awaaz nahi mili. Kripya haan ya nahi bolein."
-    );
-
-    res.type("text/xml");
-    return res.send(
-      twiml.toString()
-    );
-
-  }
-
-  /* SMART YES WORDS */
+  console.log("Intent:", speech);
 
   const yesWords = [
-
     "yes",
-    "yeah",
-    "yep",
-    "sure",
-    "ok",
-    "okay",
     "book",
     "appointment",
-    "schedule",
     "doctor",
-
-    "haan",
-    "ha",
-    "han",
-    "haan ji",
-    "kar do",
-    "book karo",
-    "chahiye",
-    "karna hai",
-    "appointment chahiye"
+    "schedule"
   ];
 
-  /* SMART NO WORDS */
-
   const noWords = [
-
     "no",
-    "nope",
     "cancel",
-    "later",
-    "not now",
-
-    "nahi",
-    "nahin",
-    "mat",
-    "baad me",
-    "cancel karo",
-    "abhi nahi"
+    "later"
   ];
 
   const isYes =
@@ -331,267 +150,224 @@ app.post("/intent", (req, res) => {
       speech.includes(word)
     );
 
-  /* YES FLOW */
-
   if (isYes) {
 
-    session.retries = 0;
-
-    const gather =
-      fastGather(
-        twiml,
-        "/get-name"
-      );
+    const gather = twiml.gather({
+      input: "speech",
+      language: "en-US",
+      action: `${process.env.PUBLIC_URL}/get-name`,
+      method: "POST",
+      timeout: 3,
+      speechTimeout: "auto",
+      actionOnEmptyResult: true
+    });
 
     gather.say(
-      "Theek hai. Kripya apna naam batayein."
+      {
+        voice: "Polly.Joanna"
+      },
+      "Okay. Please tell me your name."
     );
 
   }
-
-  /* NO FLOW */
 
   else if (isNo) {
 
     twiml.say(
-      "Theek hai. Dhanyavaad."
+      {
+        voice: "Polly.Joanna"
+      },
+      "Okay. Thank you."
     );
 
     twiml.hangup();
 
-    sessions.delete(
-      req.body.CallSid
+  }
+
+  else {
+
+    twiml.say(
+      {
+        voice: "Polly.Joanna"
+      },
+      "Please say yes or no."
+    );
+
+    twiml.redirect(
+      `${process.env.PUBLIC_URL}/twiml`
     );
 
   }
 
-  /* UNKNOWN */
-
-  else {
-
-    session.retries++;
-
-    if (session.retries < 3) {
-
-      const gather =
-        fastGather(
-          twiml,
-          "/intent"
-        );
-
-      gather.say(
-        "Samajh nahi aaya. Kripya haan ya nahi bolein."
-      );
-
-    }
-
-    else {
-
-      twiml.say(
-        "Response nahi mila. Call band ki ja rahi hai."
-      );
-
-      twiml.hangup();
-
-      sessions.delete(
-        req.body.CallSid
-      );
-
-    }
-
-  }
-
   res.type("text/xml");
-  res.send(
-    twiml.toString()
-  );
+  res.send(twiml.toString());
 
 });
 
 /* =============================
-   NAME
+   STEP 3 — NAME
 ============================= */
 
 app.post("/get-name", (req, res) => {
 
-  const twiml =
-    new VoiceResponse();
+  const twiml = new VoiceResponse();
 
-  const session =
-    getSession(
-      req.body.CallSid
-    );
+  const name =
+    req.body.SpeechResult || "Guest";
 
-  session.name =
-    req.body.SpeechResult ||
-    "Guest";
+  bookingData.name = name;
 
-  const gather =
-    fastGather(
-      twiml,
-      "/get-date"
-    );
+  console.log("Name:", name);
+
+  const gather = twiml.gather({
+    input: "speech",
+    language: "en-US",
+    action: `${process.env.PUBLIC_URL}/get-date`,
+    method: "POST",
+    timeout: 3,
+    speechTimeout: "auto",
+    actionOnEmptyResult: true
+  });
 
   gather.say(
-    "Kaunsi date par appointment chahte hain?"
+    {
+      voice: "Polly.Joanna"
+    },
+    `Thank you ${name}. Which date would you like to book your appointment?`
   );
 
   res.type("text/xml");
-  res.send(
-    twiml.toString()
-  );
+  res.send(twiml.toString());
 
 });
 
 /* =============================
-   DATE
+   STEP 4 — DATE
 ============================= */
 
 app.post("/get-date", (req, res) => {
 
-  const twiml =
-    new VoiceResponse();
+  const twiml = new VoiceResponse();
 
-  const session =
-    getSession(
-      req.body.CallSid
-    );
+  const date =
+    req.body.SpeechResult || "Tomorrow";
 
-  session.date =
-    req.body.SpeechResult ||
-    "Tomorrow";
+  bookingData.date = date;
 
-  const gather =
-    fastGather(
-      twiml,
-      "/get-time"
-    );
+  console.log("Date:", date);
+
+  const gather = twiml.gather({
+    input: "speech",
+    language: "en-US",
+    action: `${process.env.PUBLIC_URL}/get-time`,
+    method: "POST",
+    timeout: 3,
+    speechTimeout: "auto",
+    actionOnEmptyResult: true
+  });
 
   gather.say(
-    "Samay chuniyega. Das baje, gyarah baje, do baje, ya chaar baje."
+    {
+      voice: "Polly.Joanna"
+    },
+    `Great. Your appointment is being scheduled for ${date}. Please choose a time slot. Available times are 10 AM, 11:30 AM, 2 PM, or 4:30 PM.`
   );
 
   res.type("text/xml");
-  res.send(
-    twiml.toString()
-  );
+  res.send(twiml.toString());
 
 });
 
 /* =============================
-   TIME
+   STEP 5 — TIME SLOT + SAVE
 ============================= */
 
 app.post("/get-time", (req, res) => {
 
-  const twiml =
-    new VoiceResponse();
-
-  const session =
-    getSession(
-      req.body.CallSid
-    );
+  const twiml = new VoiceResponse();
 
   const speech =
     (req.body.SpeechResult || "")
       .toLowerCase()
       .trim();
 
-  console.log(
-    "Time speech:",
-    speech
-  );
+  console.log("Time speech:", speech);
 
-  let selected = null;
+  const timeSlots = [
+    "10:00 am",
+    "11:30 am",
+    "2:00 pm",
+    "4:30 pm"
+  ];
 
-  if (
-    speech.includes("10") ||
-    speech.includes("ten") ||
-    speech.includes("das")
-  ) {
-    selected =
-      "10:00 AM";
+  let selectedTime = null;
+
+  for (let slot of timeSlots) {
+
+    if (
+      speech.includes(slot) ||
+      speech.includes(
+        slot.replace(":00", "")
+      ) ||
+      speech.includes(
+        slot.replace(":", "")
+      )
+    ) {
+      selectedTime = slot;
+      break;
+    }
+
   }
 
-  else if (
-    speech.includes("11") ||
-    speech.includes("eleven") ||
-    speech.includes("gyarah")
-  ) {
-    selected =
-      "11:30 AM";
-  }
+  if (selectedTime) {
 
-  else if (
-    speech.includes("2") ||
-    speech.includes("two") ||
-    speech.includes("do")
-  ) {
-    selected =
-      "2:00 PM";
-  }
+    bookingData.time =
+      selectedTime;
 
-  else if (
-    speech.includes("4") ||
-    speech.includes("four") ||
-    speech.includes("chaar")
-  ) {
-    selected =
-      "4:30 PM";
-  }
-
-  if (selected) {
-
-    session.time =
-      selected;
+    console.log(
+      "Final booking:",
+      bookingData
+    );
 
     saveAppointmentAsync(
-      session
+      bookingData
     );
 
     twiml.say(
-      `Appointment ${selected} par book ho gaya hai. Dhanyavaad.`
+      {
+        voice: "Polly.Joanna"
+      },
+      `Your appointment has been booked for ${selectedTime}. Thank you.`
     );
 
     twiml.hangup();
-
-    sessions.delete(
-      req.body.CallSid
-    );
 
   }
 
   else {
 
-    session.retries++;
+    const gather =
+      twiml.gather({
 
-    if (session.retries < 3) {
+        input: "speech",
+        language: "en-US",
 
-      const gather =
-        fastGather(
-          twiml,
-          "/get-time"
-        );
+        action:
+          `${process.env.PUBLIC_URL}/get-time`,
 
-      gather.say(
-        "Kripya valid time bolein. Jaise das baje, gyarah baje, do baje."
-      );
+        method: "POST",
 
-    }
+        timeout: 3,
+        speechTimeout: "auto",
+        actionOnEmptyResult: true
+      });
 
-    else {
-
-      twiml.say(
-        "Time samajh nahi aaya. Call ending."
-      );
-
-      twiml.hangup();
-
-      sessions.delete(
-        req.body.CallSid
-      );
-
-    }
+    gather.say(
+      {
+        voice: "Polly.Joanna"
+      },
+      "Please choose a valid time slot. Available times are 10 AM, 11:30 AM, 2 PM, or 4:30 PM."
+    );
 
   }
 
