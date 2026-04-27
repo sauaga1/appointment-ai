@@ -13,7 +13,7 @@ app.use(express.urlencoded({ extended: true }));
 const VoiceResponse = twilio.twiml.VoiceResponse;
 
 /* =============================
-   HTTP KEEP ALIVE (FASTER)
+   HTTP KEEP ALIVE
 ============================= */
 
 const agent = new http.Agent({
@@ -30,7 +30,7 @@ const client = twilio(
 );
 
 /* =============================
-   SESSION STORAGE (PER CALL)
+   SESSION STORAGE
 ============================= */
 
 const sessions = new Map();
@@ -42,7 +42,8 @@ function getSession(callSid) {
     sessions.set(callSid, {
       name: "",
       date: "",
-      time: ""
+      time: "",
+      retries: 0
     });
 
   }
@@ -52,7 +53,7 @@ function getSession(callSid) {
 }
 
 /* =============================
-   FAST ASYNC DATABASE SAVE
+   FAST DATABASE SAVE
 ============================= */
 
 function saveAppointmentAsync(data) {
@@ -82,7 +83,6 @@ function saveAppointmentAsync(data) {
           },
 
           agent,
-
           keepalive: true,
 
           signal:
@@ -114,13 +114,10 @@ function saveAppointmentAsync(data) {
 }
 
 /* =============================
-   ULTRA FAST GATHER TEMPLATE
+   FAST GATHER TEMPLATE
 ============================= */
 
-function fastGather(
-  twiml,
-  url
-) {
+function fastGather(twiml, url) {
 
   return twiml.gather({
 
@@ -146,7 +143,7 @@ function fastGather(
 }
 
 /* =============================
-   HEALTH CHECK
+   HEALTH
 ============================= */
 
 app.get("/", (req, res) => {
@@ -161,60 +158,82 @@ app.get("/", (req, res) => {
    CALL TRIGGER
 ============================= */
 
-app.post(
-  "/call",
-  async (req, res) => {
+app.post("/call", async (req, res) => {
 
-    try {
+  try {
 
-      const { to } =
-        req.body;
+    const { to } =
+      req.body;
 
-      const call =
-        await client.calls.create({
+    const call =
+      await client.calls.create({
 
-          to,
+        to,
 
-          from:
-            process.env
-              .TWILIO_PHONE_NUMBER,
+        from:
+          process.env
+            .TWILIO_PHONE_NUMBER,
 
-          url:
-            `${process.env.PUBLIC_URL}/twiml`,
+        url:
+          `${process.env.PUBLIC_URL}/twiml`,
 
-          method: "POST"
+        method: "POST"
 
-        });
-
-      res.json({
-        success: true,
-        callSid:
-          call.sid
       });
 
-    } catch (error) {
+    res.json({
+      success: true,
+      callSid:
+        call.sid
+    });
 
-      res.status(500).json({
-        success: false,
-        error:
-          error.message
-      });
+  } catch (error) {
 
-    }
+    res.status(500).json({
+      success: false,
+      error:
+        error.message
+    });
 
   }
-);
+
+});
 
 /* =============================
    STEP 1 — GREETING
 ============================= */
 
-app.post(
-  "/twiml",
-  (req, res) => {
+app.post("/twiml", (req, res) => {
 
-    const twiml =
-      new VoiceResponse();
+  const twiml =
+    new VoiceResponse();
+
+  const session =
+    getSession(
+      req.body.CallSid
+    );
+
+  session.retries++;
+
+  if (session.retries > 2) {
+
+    twiml.say(
+      {
+        voice:
+          "Polly.Joanna"
+      },
+      "No response received. Please call again later."
+    );
+
+    twiml.hangup();
+
+    sessions.delete(
+      req.body.CallSid
+    );
+
+  }
+
+  else {
 
     const gather =
       fastGather(
@@ -230,130 +249,59 @@ app.post(
       "Hello. Would you like to book an appointment?"
     );
 
-    res.type("text/xml");
-    res.send(
-      twiml.toString()
-    );
-
   }
-);
+
+  res.type("text/xml");
+  res.send(
+    twiml.toString()
+  );
+
+});
 
 /* =============================
    STEP 2 — INTENT
 ============================= */
 
-app.post(
-  "/intent",
-  (req, res) => {
+app.post("/intent", (req, res) => {
 
-    const twiml =
-      new VoiceResponse();
+  const twiml =
+    new VoiceResponse();
 
-    const speech =
-      (
-        req.body
-          .SpeechResult ||
-        ""
-      )
-        .toLowerCase()
-        .trim();
+  const speech =
+    (req.body.SpeechResult || "")
+      .toLowerCase()
+      .trim();
 
-    const yesWords = [
-      "yes",
-      "book",
-      "appointment",
-      "schedule"
-    ];
+  const yesWords = [
+    "yes",
+    "yeah",
+    "book",
+    "appointment",
+    "schedule"
+  ];
 
-    const noWords = [
-      "no",
-      "cancel",
-      "later"
-    ];
+  const noWords = [
+    "no",
+    "cancel",
+    "later"
+  ];
 
-    const isYes =
-      yesWords.some(w =>
-        speech.includes(w)
-      );
-
-    const isNo =
-      noWords.some(w =>
-        speech.includes(w)
-      );
-
-    if (isYes) {
-
-      const gather =
-        fastGather(
-          twiml,
-          "/get-name"
-        );
-
-      gather.say(
-        {
-          voice:
-            "Polly.Joanna"
-        },
-        "Please tell me your name."
-      );
-
-    }
-
-    else if (isNo) {
-
-      twiml.say(
-        {
-          voice:
-            "Polly.Joanna"
-        },
-        "Okay. Thank you."
-      );
-
-      twiml.hangup();
-
-    }
-
-    else {
-
-      twiml.redirect(
-        `${process.env.PUBLIC_URL}/twiml`
-      );
-
-    }
-
-    res.type("text/xml");
-    res.send(
-      twiml.toString()
+  const isYes =
+    yesWords.some(word =>
+      speech.includes(word)
     );
 
-  }
-);
+  const isNo =
+    noWords.some(word =>
+      speech.includes(word)
+    );
 
-/* =============================
-   STEP 3 — NAME
-============================= */
-
-app.post(
-  "/get-name",
-  (req, res) => {
-
-    const twiml =
-      new VoiceResponse();
-
-    const session =
-      getSession(
-        req.body.CallSid
-      );
-
-    session.name =
-      req.body
-        .SpeechResult ||
-      "Guest";
+  if (isYes) {
 
     const gather =
       fastGather(
         twiml,
-        "/get-date"
+        "/get-name"
       );
 
     gather.say(
@@ -361,37 +309,201 @@ app.post(
         voice:
           "Polly.Joanna"
       },
-      "Which date would you like?"
-    );
-
-    res.type("text/xml");
-    res.send(
-      twiml.toString()
+      "Please tell me your name."
     );
 
   }
-);
+
+  else if (isNo) {
+
+    twiml.say(
+      {
+        voice:
+          "Polly.Joanna"
+      },
+      "Okay. Thank you."
+    );
+
+    twiml.hangup();
+
+    sessions.delete(
+      req.body.CallSid
+    );
+
+  }
+
+  else {
+
+    twiml.say(
+      {
+        voice:
+          "Polly.Joanna"
+      },
+      "Sorry, I did not understand."
+    );
+
+    twiml.hangup();
+
+    sessions.delete(
+      req.body.CallSid
+    );
+
+  }
+
+  res.type("text/xml");
+  res.send(
+    twiml.toString()
+  );
+
+});
+
+/* =============================
+   STEP 3 — NAME
+============================= */
+
+app.post("/get-name", (req, res) => {
+
+  const twiml =
+    new VoiceResponse();
+
+  const session =
+    getSession(
+      req.body.CallSid
+    );
+
+  session.name =
+    req.body.SpeechResult ||
+    "Guest";
+
+  const gather =
+    fastGather(
+      twiml,
+      "/get-date"
+    );
+
+  gather.say(
+    {
+      voice:
+        "Polly.Joanna"
+    },
+    "Which date would you like?"
+  );
+
+  res.type("text/xml");
+  res.send(
+    twiml.toString()
+  );
+
+});
 
 /* =============================
    STEP 4 — DATE
 ============================= */
 
-app.post(
-  "/get-date",
-  (req, res) => {
+app.post("/get-date", (req, res) => {
 
-    const twiml =
-      new VoiceResponse();
+  const twiml =
+    new VoiceResponse();
 
-    const session =
-      getSession(
-        req.body.CallSid
-      );
+  const session =
+    getSession(
+      req.body.CallSid
+    );
 
-    session.date =
-      req.body
-        .SpeechResult ||
-      "Tomorrow";
+  session.date =
+    req.body.SpeechResult ||
+    "Tomorrow";
+
+  const gather =
+    fastGather(
+      twiml,
+      "/get-time"
+    );
+
+  gather.say(
+    {
+      voice:
+        "Polly.Joanna"
+    },
+    "Choose time. Ten AM, eleven thirty AM, two PM, or four thirty PM."
+  );
+
+  res.type("text/xml");
+  res.send(
+    twiml.toString()
+  );
+
+});
+
+/* =============================
+   STEP 5 — TIME + SAVE
+============================= */
+
+app.post("/get-time", (req, res) => {
+
+  const twiml =
+    new VoiceResponse();
+
+  const session =
+    getSession(
+      req.body.CallSid
+    );
+
+  const speech =
+    (req.body.SpeechResult || "")
+      .toLowerCase()
+      .trim();
+
+  const slots = [
+    "10:00 am",
+    "11:30 am",
+    "2:00 pm",
+    "4:30 pm"
+  ];
+
+  let selected = null;
+
+  for (let slot of slots) {
+
+    if (
+      speech.includes(slot) ||
+      speech.includes(
+        slot.replace(":00", "")
+      )
+    ) {
+
+      selected = slot;
+      break;
+
+    }
+
+  }
+
+  if (selected) {
+
+    session.time = selected;
+
+    saveAppointmentAsync(
+      session
+    );
+
+    twiml.say(
+      {
+        voice:
+          "Polly.Joanna"
+      },
+      "Appointment booked. Thank you."
+    );
+
+    twiml.hangup();
+
+    sessions.delete(
+      req.body.CallSid
+    );
+
+  }
+
+  else {
 
     const gather =
       fastGather(
@@ -404,144 +516,30 @@ app.post(
         voice:
           "Polly.Joanna"
       },
-      "Choose time. Ten AM, eleven thirty AM, two PM, or four thirty PM."
-    );
-
-    res.type("text/xml");
-    res.send(
-      twiml.toString()
+      "Please choose valid time."
     );
 
   }
-);
 
-/* =============================
-   STEP 5 — TIME + SAVE
-============================= */
+  res.type("text/xml");
+  res.send(
+    twiml.toString()
+  );
 
-app.post(
-  "/get-time",
-  (req, res) => {
-
-    const twiml =
-      new VoiceResponse();
-
-    const session =
-      getSession(
-        req.body.CallSid
-      );
-
-    const speech =
-      (
-        req.body
-          .SpeechResult ||
-        ""
-      )
-        .toLowerCase()
-        .trim();
-
-    const slots = [
-      "10:00 am",
-      "11:30 am",
-      "2:00 pm",
-      "4:30 pm"
-    ];
-
-    let selected =
-      null;
-
-    for (
-      let slot of slots
-    ) {
-
-      if (
-        speech.includes(
-          slot
-        ) ||
-        speech.includes(
-          slot.replace(
-            ":00",
-            ""
-          )
-        )
-      ) {
-
-        selected =
-          slot;
-
-        break;
-
-      }
-
-    }
-
-    if (selected) {
-
-      session.time =
-        selected;
-
-      saveAppointmentAsync(
-        session
-      );
-
-      twiml.say(
-        {
-          voice:
-            "Polly.Joanna"
-        },
-        "Appointment booked. Thank you."
-      );
-
-      twiml.hangup();
-
-      sessions.delete(
-        req.body.CallSid
-      );
-
-    }
-
-    else {
-
-      const gather =
-        fastGather(
-          twiml,
-          "/get-time"
-        );
-
-      gather.say(
-        {
-          voice:
-            "Polly.Joanna"
-        },
-        "Please choose valid time."
-      );
-
-    }
-
-    res.type("text/xml");
-    res.send(
-      twiml.toString()
-    );
-
-  }
-);
+});
 
 /* =============================
    START SERVER
 ============================= */
 
 const PORT =
-  process.env.PORT ||
-  8080;
+  process.env.PORT || 8080;
 
-app.listen(
-  PORT,
-  () => {
+app.listen(PORT, () => {
 
-    console.log(
-      "Server running on port",
-      PORT
-    );
+  console.log(
+    "Server running on port",
+    PORT
+  );
 
-  }
-);
+});
