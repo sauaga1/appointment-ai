@@ -181,4 +181,39 @@ wss.on("connection", (ws) => {
 
   });
 
+  app.post("/twiml", (req, res) => {
+  const twilio = require("twilio");
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+
+  const twiml = new VoiceResponse();
+
+  twiml.say(
+    {
+      voice: "alice",
+      language: "hi-IN"
+    },
+    "Namaste. Yeh clinic se automated call hai. Appointment ke liye 1 dabaiye."
+  );
+
+  res.type("text/xml");
+  res.send(twiml.toString());
+});
+
+  app.post("/twiml", (req, res) => {
+  const twilio = require("twilio");
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+
+  const twiml = new VoiceResponse();
+
+  twiml.say(
+    {
+      voice: "alice",
+      language: "hi-IN"
+    },
+    "Namaste. Yeh clinic se automated call hai. Appointment ke liye 1 dabaiye."
+  );
+
+  res.type("text/xml");
+  res.send(twiml.toString());
+});
 });
