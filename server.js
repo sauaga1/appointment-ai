@@ -127,16 +127,18 @@ app.post("/twiml", (req, res) => {
 
       language: "hi-IN",
 
+      timeout: 5,              // wait time increased
+
       speechTimeout: "auto",
 
-      timeout: 2,
+      actionOnEmptyResult: true,
 
       method: "POST",
 
       action:
         `${process.env.PUBLIC_URL}/response`
 
-    });
+  });
 
   gather.say(
     {
@@ -146,7 +148,14 @@ app.post("/twiml", (req, res) => {
     "नमस्ते। क्या आप अपॉइंटमेंट बुक करना चाहते हैं?"
   );
 
+  /* IMPORTANT FALLBACK */
+
+  twiml.redirect(
+    `${process.env.PUBLIC_URL}/twiml`
+  );
+
   res.type("text/xml");
+
   res.send(
     twiml.toString()
   );
