@@ -441,10 +441,10 @@ app.post(
         .trim();
 
     const slots = [
-      "10:00 am",
-      "11:30 am",
-      "2:00 pm",
-      "4:30 pm"
+      "10 am",
+      "11 am",
+      "2 pm",
+      "4 pm"
     ];
 
     let selected =
