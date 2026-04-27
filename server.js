@@ -1,10 +1,17 @@
 import express from "express";
 import dotenv from "dotenv";
 import twilio from "twilio";
+import http from "http";
+
+// Load env
 
 dotenv.config();
 
 const app = express();
+
+/* =============================
+   FAST BODY PARSING
+============================= */
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
@@ -21,7 +28,7 @@ const client = twilio(
 );
 
 /* =============================
-   SESSION STORAGE
+   SESSION STORAGE (FAST IN-MEMORY)
 ============================= */
 
 const sessions = new Map();
@@ -39,12 +46,12 @@ function getSession(callSid) {
 }
 
 /* =============================
-   DATABASE SAVE (FAST)
+   BACKGROUND SAVE (NON-BLOCKING)
 ============================= */
 
 async function saveAppointment(data) {
   try {
-    console.log("Sending to API:", data);
+    if (!process.env.APPOINTMENT_API_URL) return;
 
     await fetch(process.env.APPOINTMENT_API_URL, {
       method: "POST",
@@ -53,10 +60,10 @@ async function saveAppointment(data) {
       },
       body: JSON.stringify(data)
     });
-
-    console.log("Appointment saved");
   } catch (err) {
-    console.log("Save error:", err.message);
+    if (process.env.NODE_ENV !== "production") {
+      console.log("Save error:", err.message);
+    }
   }
 }
 
@@ -80,8 +87,6 @@ app.post("/call", async (req, res) => {
       callSid: call.sid
     });
   } catch (error) {
-    console.error("CALL ERROR:", error.message);
-
     res.status(500).json({
       success: false,
       error: error.message
@@ -99,7 +104,8 @@ app.post("/twiml", (req, res) => {
   const gather = twiml.gather({
     input: "dtmf",
     numDigits: 1,
-    timeout: 5,
+    timeout: 3,
+    speechTimeout: "auto",
     actionOnEmptyResult: true,
     action: `${process.env.PUBLIC_URL}/menu`,
     method: "POST"
@@ -108,7 +114,8 @@ app.post("/twiml", (req, res) => {
   gather.say(
     {
       voice: "Polly.Aditi",
-      language: "hi-IN"
+      language: "hi-IN",
+      rate: "fast"
     },
     "नमस्ते। अपॉइंटमेंट बुक करने के लिए एक दबाएं।"
   );
@@ -130,7 +137,8 @@ app.post("/menu", (req, res) => {
     twiml.say(
       {
         voice: "Polly.Aditi",
-        language: "hi-IN"
+        language: "hi-IN",
+        rate: "fast"
       },
       "गलत विकल्प।"
     );
@@ -145,7 +153,8 @@ app.post("/menu", (req, res) => {
   const gather = twiml.gather({
     input: "dtmf",
     numDigits: 2,
-    timeout: 5,
+    timeout: 3,
+    speechTimeout: "auto",
     actionOnEmptyResult: true,
     finishOnKey: "#",
     action: `${process.env.PUBLIC_URL}/get-date`
@@ -154,9 +163,10 @@ app.post("/menu", (req, res) => {
   gather.say(
     {
       voice: "Polly.Aditi",
-      language: "hi-IN"
+      language: "hi-IN",
+      rate: "fast"
     },
-    "कृपया तारीख टाइप करें। अंत में हैश दबाएं।"
+    "कृपया तारीख टाइप करें और हैश दबाएं।"
   );
 
   res.type("text/xml");
@@ -178,7 +188,8 @@ app.post("/get-date", (req, res) => {
     twiml.say(
       {
         voice: "Polly.Aditi",
-        language: "hi-IN"
+        language: "hi-IN",
+        rate: "fast"
       },
       "गलत तारीख।"
     );
@@ -202,11 +213,14 @@ app.post("/get-date", (req, res) => {
     .toISOString()
     .split("T")[0];
 
-  console.log("DATE:", session.date);
+  if (process.env.NODE_ENV !== "production") {
+    console.log("DATE:", session.date);
+  }
 
   const gather = twiml.gather({
     input: "dtmf",
-    timeout: 5,
+    timeout: 3,
+    speechTimeout: "auto",
     actionOnEmptyResult: true,
     finishOnKey: "#",
     action: `${process.env.PUBLIC_URL}/get-time`
@@ -215,9 +229,10 @@ app.post("/get-date", (req, res) => {
   gather.say(
     {
       voice: "Polly.Aditi",
-      language: "hi-IN"
+      language: "hi-IN",
+      rate: "fast"
     },
-    "समय टाइप करें। उदाहरण। दस बजे के लिए एक शून्य दबाएं।"
+    "समय टाइप करें और हैश दबाएं।"
   );
 
   res.type("text/xml");
@@ -248,30 +263,32 @@ app.post("/get-time", (req, res) => {
   if (selected) {
     session.time = selected;
 
-    console.log("FINAL:", session);
+    if (process.env.NODE_ENV !== "production") {
+      console.log("FINAL:", session);
+    }
 
-    /* FAST SAVE (NO WAIT) */
+    /* ULTRA FAST BACKGROUND SAVE */
 
-    setTimeout(() => {
+    process.nextTick(() => {
       saveAppointment(session);
-    }, 0);
+    });
 
     twiml.say(
       {
         voice: "Polly.Aditi",
-        language: "hi-IN"
+        language: "hi-IN",
+        rate: "fast"
       },
       `आपका अपॉइंटमेंट ${session.date} को ${session.time} के लिए बुक हो गया है।`
     );
-
-    /* THANK YOU MESSAGE */
 
     twiml.pause({ length: 1 });
 
     twiml.say(
       {
         voice: "Polly.Aditi",
-        language: "hi-IN"
+        language: "hi-IN",
+        rate: "fast"
       },
       "धन्यवाद। आपका दिन शुभ हो।"
     );
@@ -283,9 +300,10 @@ app.post("/get-time", (req, res) => {
     twiml.say(
       {
         voice: "Polly.Aditi",
-        language: "hi-IN"
+        language: "hi-IN",
+        rate: "fast"
       },
-      "गलत समय। कृपया फिर से समय दर्ज करें।"
+      "गलत समय। फिर से दर्ज करें।"
     );
 
     twiml.redirect(`${process.env.PUBLIC_URL}/get-date`);
@@ -296,19 +314,24 @@ app.post("/get-time", (req, res) => {
 });
 
 /* =============================
-   HEALTH
+   HEALTH CHECK
 ============================= */
 
 app.get("/", (req, res) => {
-  res.send("IVR Running");
+  res.send("Ultra Fast IVR Running");
 });
 
 /* =============================
-   START SERVER
+   ULTRA FAST SERVER (KEEP-ALIVE)
 ============================= */
 
 const PORT = process.env.PORT || 8080;
 
-app.listen(PORT, () => {
-  console.log("Server running on", PORT);
+const server = http.createServer(app);
+
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+
+server.listen(PORT, () => {
+  console.log("Ultra Fast IVR running on port", PORT);
 });
