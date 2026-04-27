@@ -51,12 +51,12 @@ app.post("/twiml", (req, res) => {
   const twiml = new VoiceResponse();
 
   twiml.say(
-    {
-      voice: "Polly.Aditi",
-      language: "hi-IN"
-    },
-    "Namaste. Yeh clinic se automated call hai. Appointment book karne ke liye kripya phone na kaaten. Hum jaldi aap se baat karenge."
-  );
+  {
+    voice: "Polly.Aditi",
+    language: "hi-IN"
+  },
+  "Namaste ji, main clinic se bol rahi hoon. Kya aap doctor ka appointment book karna chahte hain?"
+);
 
   res.type("text/xml");
   res.send(twiml.toString());
