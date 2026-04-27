@@ -20,35 +20,49 @@ const client = twilio(
    FAST NON-BLOCKING SAVE
 ============================= */
 
-function saveAppointmentAsync(time) {
+function saveAppointmentAsync(data) {
   setImmediate(async () => {
     try {
+      console.log("Saving appointment:", data);
+
       const controller = new AbortController();
 
       const timeout = setTimeout(() => {
         controller.abort();
-      }, 2000);
+      }, 5000);
 
-      await fetch(process.env.APPOINTMENT_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          name: "Voice Caller",
-          age: "Unknown",
-          problem: "Voice Booking",
-          date: "User Selected",
-          time: time
-        })
-      });
+      const response = await fetch(
+        process.env.APPOINTMENT_API_URL,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json"
+          },
+
+          signal: controller.signal,
+
+          body: JSON.stringify({
+            name: data.name,
+            date: data.date,
+            time: data.time
+          })
+        }
+      );
 
       clearTimeout(timeout);
 
-      console.log("Appointment saved");
+      const result = await response.text();
+
+      console.log("Database response:", result);
+
     } catch (err) {
-      console.log("Save failed (non-blocking):", err.message);
+
+      console.log(
+        "Save failed:",
+        err.message
+      );
+
     }
   });
 }
