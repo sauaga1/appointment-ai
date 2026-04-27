@@ -480,47 +480,57 @@ app.post("/get-date", (req, res) => {
 
 app.post("/get-time", (req, res) => {
 
-  const twiml =
-    new VoiceResponse();
+  const twiml = new VoiceResponse();
 
   const session =
-    getSession(
-      req.body.CallSid
-    );
+    getSession(req.body.CallSid);
 
   const speech =
     (req.body.SpeechResult || "")
       .toLowerCase()
       .trim();
 
-  const slots = [
-    "10:00 am",
-    "11:30 am",
-    "2:00 pm",
-    "4:30 pm"
-  ];
+  console.log("User said:", speech);
 
   let selected = null;
 
-  for (let slot of slots) {
+  /* SMART SLOT MATCHING */
 
-    if (
-      speech.includes(slot) ||
-      speech.includes(
-        slot.replace(":00", "")
-      )
-    ) {
-
-      selected = slot;
-      break;
-
-    }
-
+  if (
+    speech.includes("10") ||
+    speech.includes("ten")
+  ) {
+    selected = "10:00 AM";
   }
+
+  else if (
+    speech.includes("11") ||
+    speech.includes("eleven")
+  ) {
+    selected = "11:30 AM";
+  }
+
+  else if (
+    speech.includes("2") ||
+    speech.includes("two")
+  ) {
+    selected = "2:00 PM";
+  }
+
+  else if (
+    speech.includes("4") ||
+    speech.includes("four")
+  ) {
+    selected = "4:30 PM";
+  }
+
+  /* SUCCESS */
 
   if (selected) {
 
     session.time = selected;
+
+    session.retries = 0;
 
     saveAppointmentAsync(
       session
@@ -528,10 +538,9 @@ app.post("/get-time", (req, res) => {
 
     twiml.say(
       {
-        voice:
-          "Polly.Joanna"
+        voice: "Polly.Joanna"
       },
-      "Appointment booked. Thank you."
+      `Appointment booked for ${selected}. Thank you.`
     );
 
     twiml.hangup();
@@ -542,21 +551,45 @@ app.post("/get-time", (req, res) => {
 
   }
 
+  /* RETRY LOGIC */
+
   else {
 
-    const gather =
-      fastGather(
-        twiml,
-        "/get-time"
+    session.retries++;
+
+    if (session.retries < 3) {
+
+      const gather =
+        fastGather(
+          twiml,
+          "/get-time"
+        );
+
+      gather.say(
+        {
+          voice: "Polly.Joanna"
+        },
+        "Please say a time. For example, ten AM, eleven thirty AM, two PM, or four thirty PM."
       );
 
-    gather.say(
-      {
-        voice:
-          "Polly.Joanna"
-      },
-      "Please choose valid time."
-    );
+    }
+
+    else {
+
+      twiml.say(
+        {
+          voice: "Polly.Joanna"
+        },
+        "No valid time received. Ending the call."
+      );
+
+      twiml.hangup();
+
+      sessions.delete(
+        req.body.CallSid
+      );
+
+    }
 
   }
 
