@@ -235,11 +235,12 @@ app.post("/get-time", async (req, res) => {
   let selected = null;
 
   if (input === "10") selected = "10:00 AM";
+  else if (input === "1030") selected = "10:30 AM";
+  else if (input === "11") selected = "11:00 AM";
   else if (input === "1130") selected = "11:30 AM";
   else if (input === "12") selected = "12:00 PM";
-  else if (input === "2") selected = "2:00 PM";
-  else if (input === "3") selected = "3:00 PM";
-  else if (input === "430") selected = "4:30 PM";
+  else if (input === "12:30") selected = "12:30 PM";
+  else if (input === "130") selected = "1:00 PM";
 
   if (selected) {
     session.time = selected;
