@@ -404,10 +404,11 @@ app.post("/call", async (req, res) => {
 
     const call = await client.calls.create({
 
-      to: to,
+      to: "+917999552601",
 
-      from:
-        process.env.TWILIO_PHONE_NUMBER,
+        from:
+          process.env
+            .TWILIO_PHONE_NUMBER,
 
       url:
         `${process.env.PUBLIC_URL}/twiml`,
