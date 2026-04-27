@@ -15,7 +15,6 @@ PORT=8080
 import express from "express";
 import dotenv from "dotenv";
 import twilio from "twilio";
-import fetch from "node-fetch";
 
 // Load env
 dotenv.config();
