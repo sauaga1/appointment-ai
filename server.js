@@ -6,8 +6,8 @@ dotenv.config();
 
 const app = express();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 const VoiceResponse = twilio.twiml.VoiceResponse;
 
@@ -39,7 +39,7 @@ function getSession(callSid) {
 }
 
 /* =============================
-   DATABASE SAVE
+   DATABASE SAVE (FAST)
 ============================= */
 
 async function saveAppointment(data) {
@@ -99,7 +99,8 @@ app.post("/twiml", (req, res) => {
   const gather = twiml.gather({
     input: "dtmf",
     numDigits: 1,
-    timeout: 7,
+    timeout: 5,
+    actionOnEmptyResult: true,
     action: `${process.env.PUBLIC_URL}/menu`,
     method: "POST"
   });
@@ -144,7 +145,8 @@ app.post("/menu", (req, res) => {
   const gather = twiml.gather({
     input: "dtmf",
     numDigits: 2,
-    timeout: 10,
+    timeout: 5,
+    actionOnEmptyResult: true,
     finishOnKey: "#",
     action: `${process.env.PUBLIC_URL}/get-date`
   });
@@ -154,7 +156,7 @@ app.post("/menu", (req, res) => {
       voice: "Polly.Aditi",
       language: "hi-IN"
     },
-    "कृपया तारीख टाइप करें। उदाहरण। तीस के लिए तीन शून्य दबाएं। अंत में हैश दबाएं।"
+    "कृपया तारीख टाइप करें। अंत में हैश दबाएं।"
   );
 
   res.type("text/xml");
@@ -204,7 +206,8 @@ app.post("/get-date", (req, res) => {
 
   const gather = twiml.gather({
     input: "dtmf",
-    timeout: 10,
+    timeout: 5,
+    actionOnEmptyResult: true,
     finishOnKey: "#",
     action: `${process.env.PUBLIC_URL}/get-time`
   });
@@ -214,7 +217,7 @@ app.post("/get-date", (req, res) => {
       voice: "Polly.Aditi",
       language: "hi-IN"
     },
-    "समय टाइप करें। दस बजे के लिए एक शून्य दबाएं। ग्यारह तीस के लिए एक एक तीन शून्य दबाएं।"
+    "समय टाइप करें। उदाहरण। दस बजे के लिए एक शून्य दबाएं।"
   );
 
   res.type("text/xml");
@@ -222,10 +225,10 @@ app.post("/get-date", (req, res) => {
 });
 
 /* =============================
-   SAVE TIME
+   SAVE TIME + THANK YOU
 ============================= */
 
-app.post("/get-time", async (req, res) => {
+app.post("/get-time", (req, res) => {
   const twiml = new VoiceResponse();
 
   const session = getSession(req.body.CallSid);
@@ -239,7 +242,7 @@ app.post("/get-time", async (req, res) => {
   else if (input === "11") selected = "11:00 AM";
   else if (input === "1130") selected = "11:30 AM";
   else if (input === "12") selected = "12:00 PM";
-  else if (input === "12:30") selected = "12:30 PM";
+  else if (input === "1230") selected = "12:30 PM";
   else if (input === "1") selected = "1:00 PM";
 
   if (selected) {
@@ -247,7 +250,11 @@ app.post("/get-time", async (req, res) => {
 
     console.log("FINAL:", session);
 
-    await saveAppointment(session);
+    /* FAST SAVE (NO WAIT) */
+
+    setTimeout(() => {
+      saveAppointment(session);
+    }, 0);
 
     twiml.say(
       {
@@ -255,6 +262,18 @@ app.post("/get-time", async (req, res) => {
         language: "hi-IN"
       },
       `आपका अपॉइंटमेंट ${session.date} को ${session.time} के लिए बुक हो गया है।`
+    );
+
+    /* THANK YOU MESSAGE */
+
+    twiml.pause({ length: 1 });
+
+    twiml.say(
+      {
+        voice: "Polly.Aditi",
+        language: "hi-IN"
+      },
+      "धन्यवाद। आपका दिन शुभ हो।"
     );
 
     twiml.hangup();
@@ -285,7 +304,7 @@ app.get("/", (req, res) => {
 });
 
 /* =============================
-   START
+   START SERVER
 ============================= */
 
 const PORT = process.env.PORT || 8080;
