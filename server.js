@@ -108,12 +108,41 @@ app.post("/intent", (req, res) => {
 
   console.log("Intent speech:", speech);
 
-  if (
-    speech.includes("haan") ||
-    speech.includes("yes") ||
-    speech.includes("book") ||
-    speech.includes("karna")
-  ) {
+  // Smart Hinglish Intent Detection
+  const yesIntents = [
+    "haan",
+    "haan ji",
+    "yes",
+    "yeah",
+    "yep",
+    "book",
+    "booking",
+    "appointment",
+    "karna",
+    "karni",
+    "kar do",
+    "schedule",
+    "doctor",
+    "milna",
+    "dikhana",
+    "checkup",
+    "consultation"
+  ];
+
+  const noIntents = [
+    "nahin",
+    "nahi",
+    "no",
+    "cancel",
+    "baad me",
+    "later",
+    "zarurat nahi"
+  ];
+
+  const isYes = yesIntents.some(word => speech.includes(word));
+  const isNo = noIntents.some(word => speech.includes(word));
+
+  if (isYes) {
     const gather = twiml.gather({
       input: "speech",
       language: "hi-IN",
