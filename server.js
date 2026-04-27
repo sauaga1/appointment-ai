@@ -1,13 +1,18 @@
 /*
 Single File: server.js
-Hindi + Hinglish Smart Conversation Voice Agent
-Works with Twilio IVR and saves appointment to database API
+Fully Fixed Hindi + Hinglish Clinic Voice Agent
+- Works with Twilio IVR
+- Handles Intent properly (no call cut)
+- Uses full PUBLIC_URL in all actions
+- Saves appointment to database API
+- Includes fallback redirects
+- Node 18 compatible (no node-fetch required)
 
-Required Environment Variables:
+ENV VARIABLES (Railway):
 TWILIO_ACCOUNT_SID=ACxxxxxxxx
 TWILIO_AUTH_TOKEN=xxxxxxxx
 TWILIO_PHONE_NUMBER=+1xxxxxxxx
-PUBLIC_URL=https://your-domain.up.railway.app
+PUBLIC_URL=https://your-app.up.railway.app
 APPOINTMENT_API_URL=https://yourdomain.com/save_appointment.php
 PORT=8080
 */
@@ -62,7 +67,7 @@ app.post("/call", async (req, res) => {
 });
 
 // =============================
-// Step 1: Greeting + Intent
+// Step 1: Greeting
 // =============================
 app.post("/twiml", (req, res) => {
   const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -71,9 +76,10 @@ app.post("/twiml", (req, res) => {
   const gather = twiml.gather({
     input: "speech",
     language: "hi-IN",
-    action: "/intent",
+    action: `${process.env.PUBLIC_URL}/intent`,
     method: "POST",
-    speechTimeout: "auto"
+    speechTimeout: 5,
+    timeout: 10
   });
 
   gather.say(
@@ -83,6 +89,9 @@ app.post("/twiml", (req, res) => {
     },
     "Namaste ji, main Riya bol rahi hoon. Kya aap appointment book karna chahte hain?"
   );
+
+  // fallback repeat
+  twiml.redirect(`${process.env.PUBLIC_URL}/twiml`);
 
   res.type("text/xml");
   res.send(twiml.toString());
@@ -97,6 +106,8 @@ app.post("/intent", (req, res) => {
 
   const speech = (req.body.SpeechResult || "").toLowerCase();
 
+  console.log("Intent speech:", speech);
+
   if (
     speech.includes("haan") ||
     speech.includes("yes") ||
@@ -106,9 +117,10 @@ app.post("/intent", (req, res) => {
     const gather = twiml.gather({
       input: "speech",
       language: "hi-IN",
-      action: "/get-name",
+      action: `${process.env.PUBLIC_URL}/get-name`,
       method: "POST",
-      speechTimeout: "auto"
+      speechTimeout: 5,
+      timeout: 10
     });
 
     gather.say(
@@ -118,16 +130,27 @@ app.post("/intent", (req, res) => {
       },
       "Theek hai. Kripya apna naam batayein."
     );
+
+    twiml.redirect(`${process.env.PUBLIC_URL}/intent`);
   } else {
-    twiml.say(
+    const retry = twiml.gather({
+      input: "speech",
+      language: "hi-IN",
+      action: `${process.env.PUBLIC_URL}/intent`,
+      method: "POST",
+      speechTimeout: 5,
+      timeout: 10
+    });
+
+    retry.say(
       {
         voice: "Polly.Aditi",
         language: "hi-IN"
       },
-      "Theek hai. Dhanyavaad."
+      "Main samajh nahi payi. Kripya haan ya na bolein."
     );
 
-    twiml.hangup();
+    twiml.redirect(`${process.env.PUBLIC_URL}/intent`);
   }
 
   res.type("text/xml");
@@ -143,12 +166,15 @@ app.post("/get-name", (req, res) => {
 
   const name = req.body.SpeechResult || "Guest";
 
+  console.log("Name:", name);
+
   const gather = twiml.gather({
     input: "speech",
     language: "hi-IN",
-    action: "/get-date",
+    action: `${process.env.PUBLIC_URL}/get-date`,
     method: "POST",
-    speechTimeout: "auto"
+    speechTimeout: 5,
+    timeout: 10
   });
 
   gather.say(
@@ -158,6 +184,8 @@ app.post("/get-name", (req, res) => {
     },
     `Dhanyavaad ${name} ji. Aap kis din appointment lena chahte hain?`
   );
+
+  twiml.redirect(`${process.env.PUBLIC_URL}/get-name`);
 
   res.type("text/xml");
   res.send(twiml.toString());
@@ -172,12 +200,15 @@ app.post("/get-date", (req, res) => {
 
   const date = req.body.SpeechResult || "Kal";
 
+  console.log("Date:", date);
+
   const gather = twiml.gather({
     input: "speech",
     language: "hi-IN",
-    action: "/get-time",
+    action: `${process.env.PUBLIC_URL}/get-time`,
     method: "POST",
-    speechTimeout: "auto"
+    speechTimeout: 5,
+    timeout: 10
   });
 
   gather.say(
@@ -187,6 +218,8 @@ app.post("/get-date", (req, res) => {
     },
     `Theek hai. ${date} ke liye appointment set kar rahe hain. Aap subah aana chahenge ya shaam?`
   );
+
+  twiml.redirect(`${process.env.PUBLIC_URL}/get-date`);
 
   res.type("text/xml");
   res.send(twiml.toString());
@@ -200,6 +233,8 @@ app.post("/get-time", async (req, res) => {
   const twiml = new VoiceResponse();
 
   const time = req.body.SpeechResult || "Subah";
+
+  console.log("Time:", time);
 
   try {
     await fetch(process.env.APPOINTMENT_API_URL, {
