@@ -52,7 +52,7 @@ app.post("/twiml", (req, res) => {
 
   twiml.say(
     {
-      voice: "alice",
+      voice: "Polly.Aditi",
       language: "hi-IN"
     },
     "Namaste. Yeh clinic se automated call hai. Appointment book karne ke liye kripya phone na kaaten. Hum jaldi aap se baat karenge."
