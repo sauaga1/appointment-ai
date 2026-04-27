@@ -104,7 +104,59 @@ app.post("/intent", (req, res) => {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  const speech = (req.body.SpeechResult || "").toLowerCase();
+  // Normalize speech (handle Hindi + Hinglish + punctuation)
+  const rawSpeech = req.body.SpeechResult || "";
+  const speech = rawSpeech
+    .toLowerCase()
+    .replace(/[!?.]/g, "")
+    .trim();
+
+  console.log("Intent speech:", speech);
+
+  // Smart Hinglish + Hindi Intent Detection
+  const yesIntents = [
+    "haan",
+    "haan ji",
+    "yes",
+    "yeah",
+    "yep",
+    "book",
+    "booking",
+    "appointment",
+    "karna",
+    "karni",
+    "kar do",
+    "schedule",
+    "doctor",
+    "milna",
+    "dikhana",
+    "checkup",
+    "consultation",
+    "हां",
+    "हाँ",
+    "हां जी",
+    "अपॉइंटमेंट",
+    "डॉक्टर",
+    "मिलना"
+  ];
+
+  const noIntents = [
+    "nahin",
+    "nahi",
+    "no",
+    "cancel",
+    "baad me",
+    "later",
+    "zarurat nahi",
+    "नहीं",
+    "नही",
+    "मत"
+  ];
+
+  const isYes = yesIntents.some(word => speech.includes(word));
+  const isNo = noIntents.some(word => speech.includes(word));
+
+  if (isYes)
 
   console.log("Intent speech:", speech);
 
