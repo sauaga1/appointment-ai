@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<body>
+<h2>Trigger Customer Call</h2>
+<input id='number' placeholder='Enter number'>
+<button onclick='makeCall()'>Call</button>
+<script>
+async function makeCall(){
+ let to=document.getElementById("number").value;
+ await fetch("/call",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to})});
+ alert("Call triggered!");
+}
+</script>
+</body>
+</html>
