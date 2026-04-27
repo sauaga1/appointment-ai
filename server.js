@@ -240,7 +240,7 @@ app.post("/get-time", async (req, res) => {
   else if (input === "1130") selected = "11:30 AM";
   else if (input === "12") selected = "12:00 PM";
   else if (input === "12:30") selected = "12:30 PM";
-  else if (input === "130") selected = "1:00 PM";
+  else if (input === "1") selected = "1:00 PM";
 
   if (selected) {
     session.time = selected;
