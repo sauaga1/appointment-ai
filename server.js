@@ -82,7 +82,7 @@ app.post("/twiml", (req, res) => {
       voice: "Polly.Aditi",
       language: "hi-IN"
     },
-    "Namaste ji, main clinic se bol rahi hoon. Kya aap appointment book karna chahte hain?"
+    "Namaste ji, main Riya bol rahi hoon. Kya aap appointment book karna chahte hain?"
   );
 
   res.type("text/xml");
