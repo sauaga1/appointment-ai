@@ -239,65 +239,121 @@ app.post("/get-name", (req, res) => {
       req.body.CallSid
     );
 
-  session.name =
-    req.body.SpeechResult ||
-    "Guest";
+  const name =
+    (req.body.SpeechResult || "")
+      .trim();
 
-  /* CREATE DATE MENU */
+  console.log(
+    "Speech Name:",
+    name
+  );
 
-  let message =
-    "कृपया तारीख चुनें। ";
+  /* IF NAME RECEIVED */
 
-  for (
-    let i = 0;
-    i < 7;
-    i++
-  ) {
+  if (name) {
 
-    const d =
-      new Date();
+    session.name = name;
 
-    d.setDate(
-      d.getDate() + i
+    console.log(
+      "Saved Name:",
+      session.name
     );
 
-    const text =
-      d.toLocaleDateString(
-        "hi-IN",
-        {
-          day: "numeric",
-          month: "long"
-        }
+    let message =
+      "कृपया तारीख चुनें। ";
+
+    for (
+      let i = 0;
+      i < 7;
+      i++
+    ) {
+
+      const d =
+        new Date();
+
+      d.setDate(
+        d.getDate() + i
       );
 
-    message +=
-      `${text} के लिए ${
-        i + 1
-      } दबाएं। `;
+      const text =
+        d.toLocaleDateString(
+          "hi-IN",
+          {
+            day: "numeric",
+            month: "long"
+          }
+        );
+
+      message +=
+        `${text} के लिए ${
+          i + 1
+        } दबाएं। `;
+
+    }
+
+    const gather =
+      twiml.gather({
+
+        input: "dtmf",
+
+        numDigits: 1,
+
+        timeout: 7,
+
+        action:
+          `${process.env.PUBLIC_URL}/get-date`
+
+      });
+
+    gather.say(
+      {
+        voice: "Polly.Aditi",
+        language: "hi-IN"
+      },
+      message
+    );
 
   }
 
-  const gather =
-    twiml.gather({
+  /* IF NO SPEECH */
 
-      input: "dtmf",
+  else {
 
-      numDigits: 1,
+    const gather =
+      twiml.gather({
 
-      timeout: 7,
+        input: "speech",
 
-      action:
-        `${process.env.PUBLIC_URL}/get-date`
+        language: "hi-IN",
 
-    });
+        timeout: 6,
 
-  gather.say(
-    {
-      voice: "Polly.Aditi",
-      language: "hi-IN"
-    },
-    message
-  );
+        speechTimeout: "auto",
+
+        actionOnEmptyResult: true,
+
+        method: "POST",
+
+        action:
+          `${process.env.PUBLIC_URL}/get-name`
+
+      });
+
+    gather.say(
+      {
+        voice: "Polly.Aditi",
+        language: "hi-IN"
+      },
+      "मुझे आपका नाम समझ नहीं आया। कृपया फिर से अपना नाम बताइए।"
+    );
+
+    /* fallback */
+
+    twiml.redirect(
+      `${process.env.PUBLIC_URL}/get-name`
+    );
+
+  }
 
   res.type("text/xml");
 
@@ -306,7 +362,6 @@ app.post("/get-name", (req, res) => {
   );
 
 });
-
 /* =============================
    STEP 4 — DATE
 ============================= */
