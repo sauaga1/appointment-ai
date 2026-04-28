@@ -22,9 +22,10 @@ const client = twilio(
 async function sendWhatsAppLink(customerNumber) {
   try {
     const message = await client.messages.create({
-      from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`,
-      to: `whatsapp:${customerNumber}`,
-      body: `नमस्ते,\n\nकृपया नीचे दिए गए लिंक पर क्लिक करें:\n${process.env.WHATSAPP_LINK}`
+      from: 'whatsapp:+14155238886',
+        contentSid: 'HX229f5a04fd0510ce1b071852155d3e75',
+        contentVariables: '{"1":"409173"}',
+        to: 'whatsapp:+918236841215'
     });
 
     console.log("WhatsApp sent:", message.sid);
