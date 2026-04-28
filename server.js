@@ -23,7 +23,7 @@ async function sendWhatsAppLink(customerNumber) {
   try {
     const message = await client.messages.create({
       from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`,
-  to: `whatsapp:${customerNumber}`,
+  to: `whatsapp:${process.env.CUSTOMER_NUMBER}`,
   body: `नमस्ते,\n\nकृपया इस लिंक पर क्लिक करें:\n${process.env.WHATSAPP_LINK}`
     });
 
