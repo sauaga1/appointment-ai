@@ -20,70 +20,61 @@ const client = twilio(
 /* =========================
    SEND WHATSAPP MESSAGE
 ========================= */
-async function sendWhatsAppLink(to) {
+async function sendWhatsAppLink(customerNumber) {
   try {
     const message = await client.messages.create({
       from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`,
-      to: `whatsapp:${to}`,
+      to: `whatsapp:${customerNumber}`,
       body: `नमस्ते,\n\nकृपया नीचे दिए गए लिंक पर क्लिक करें:\n${process.env.WHATSAPP_LINK}`
     });
 
     console.log("WhatsApp sent:", message.sid);
   } catch (error) {
-    console.error("WhatsApp send failed:", error.message);
+    console.error("WhatsApp failed:", error.message);
   }
 }
 
 /* =========================
-   START OUTBOUND CALL
+   INCOMING CALL HANDLER
 ========================= */
-app.post("/call", async (req, res) => {
-  try {
-    const { to } = req.body;
-
-    const call = await client.calls.create({
-      to,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      url: `${process.env.PUBLIC_URL}/twiml`,
-      method: "POST"
-    });
-
-    res.json({
-      success: true,
-      callSid: call.sid
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-/* =========================
-   CALL FLOW
-========================= */
-app.post("/twiml", (req, res) => {
+app.post("/voice", (req, res) => {
   const twiml = new VoiceResponse();
 
-  const customerNumber = req.body.Called || req.body.To;
+  const customerNumber = req.body.From;
 
-  // send WhatsApp in background
+  // background WhatsApp send
   process.nextTick(() => {
-    sendWhatsAppLink(customerNumber);
+    sendWhatsAppLink(customerNumber.replace("whatsapp:", ""));
   });
 
-  // voice message
+  // Welcome message
   twiml.say(
     {
       voice: "Polly.Aditi",
       language: "hi-IN"
     },
-    "नमस्ते। आपकी सुविधा के लिए मैंने आपके व्हाट्सएप पर एक लिंक भेजी है। कृपया उसे खोलें। धन्यवाद।"
+    "नमस्ते।"
   );
 
-  twiml.pause({ length: 1 });
+  // Inform message
+  twiml.say(
+    {
+      voice: "Polly.Aditi",
+      language: "hi-IN"
+    },
+    "मैंने आपके व्हाट्सएप पर एक लिंक भेजी है।"
+  );
 
+  // Thanks
+  twiml.say(
+    {
+      voice: "Polly.Aditi",
+      language: "hi-IN"
+    },
+    "धन्यवाद।"
+  );
+
+  // End call
   twiml.hangup();
 
   res.type("text/xml");
@@ -94,15 +85,14 @@ app.post("/twiml", (req, res) => {
    HEALTH CHECK
 ========================= */
 app.get("/", (req, res) => {
-  res.send("Voice + WhatsApp service running");
+  res.send("Incoming call + WhatsApp service running");
 });
 
 /* =========================
    START SERVER
 ========================= */
 const PORT = process.env.PORT || 3000;
-const server = http.createServer(app);
 
-server.listen(PORT, () => {
+http.createServer(app).listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
