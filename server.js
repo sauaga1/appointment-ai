@@ -1,7 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
 import twilio from "twilio";
-import http from "http";
 
 dotenv.config();
 
@@ -18,7 +17,7 @@ const client = twilio(
 );
 
 /* =========================
-   SEND WHATSAPP MESSAGE
+   SEND WHATSAPP
 ========================= */
 async function sendWhatsAppLink(customerNumber) {
   try {
@@ -30,51 +29,30 @@ async function sendWhatsAppLink(customerNumber) {
 
     console.log("WhatsApp sent:", message.sid);
   } catch (error) {
-    console.error("WhatsApp failed:", error.message);
+    console.error("WhatsApp error:", error.message);
   }
 }
 
 /* =========================
-   INCOMING CALL HANDLER
+   INCOMING CALL WEBHOOK
 ========================= */
 app.post("/voice", (req, res) => {
   const twiml = new VoiceResponse();
 
   const customerNumber = req.body.From;
 
-  // background WhatsApp send
-  process.nextTick(() => {
-    sendWhatsAppLink(customerNumber.replace("whatsapp:", ""));
-  });
+  // WhatsApp immediately
+  sendWhatsAppLink(customerNumber).catch(console.error);
 
-  // Welcome message
+  // Voice message
   twiml.say(
     {
       voice: "Polly.Aditi",
       language: "hi-IN"
     },
-    "नमस्ते।"
+    "नमस्ते। मैंने आपके व्हाट्सएप पर एक लिंक भेजी है। कृपया उसे देखें। धन्यवाद।"
   );
 
-  // Inform message
-  twiml.say(
-    {
-      voice: "Polly.Aditi",
-      language: "hi-IN"
-    },
-    "मैंने आपके व्हाट्सएप पर एक लिंक भेजी है।"
-  );
-
-  // Thanks
-  twiml.say(
-    {
-      voice: "Polly.Aditi",
-      language: "hi-IN"
-    },
-    "धन्यवाद।"
-  );
-
-  // End call
   twiml.hangup();
 
   res.type("text/xml");
@@ -85,7 +63,7 @@ app.post("/voice", (req, res) => {
    HEALTH CHECK
 ========================= */
 app.get("/", (req, res) => {
-  res.send("Incoming call + WhatsApp service running");
+  res.send("Twilio WhatsApp service running");
 });
 
 /* =========================
@@ -93,6 +71,6 @@ app.get("/", (req, res) => {
 ========================= */
 const PORT = process.env.PORT || 3000;
 
-http.createServer(app).listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
